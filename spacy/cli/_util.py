@@ -48,6 +48,7 @@ and custom model implementations.
 """
 BENCHMARK_HELP = """Commands for benchmarking pipelines."""
 INIT_HELP = """Commands for initializing configs and pipeline packages."""
+CONFIGURE_HELP = """Commands for automatically modifying configs."""
 
 # Wrappers for Typer's annotations. Initially created to set defaults and to
 # keep the names short, but not needed at the moment.
@@ -59,11 +60,13 @@ benchmark_cli = typer.Typer(name="benchmark", help=BENCHMARK_HELP, no_args_is_he
 project_cli = typer.Typer(name="project", help=PROJECT_HELP, no_args_is_help=True)
 debug_cli = typer.Typer(name="debug", help=DEBUG_HELP, no_args_is_help=True)
 init_cli = typer.Typer(name="init", help=INIT_HELP, no_args_is_help=True)
+configure_cli = typer.Typer(name="configure", help=CONFIGURE_HELP, no_args_is_help=True)
 
 app.add_typer(project_cli)
 app.add_typer(debug_cli)
 app.add_typer(benchmark_cli)
 app.add_typer(init_cli)
+app.add_typer(configure_cli)
 
 
 def setup_cli() -> None:

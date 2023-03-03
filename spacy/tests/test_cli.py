@@ -21,6 +21,7 @@ from spacy.cli._util import parse_config_overrides, string_to_list
 from spacy.cli._util import substitute_project_variables
 from spacy.cli._util import validate_project_commands
 from spacy.cli._util import upload_file, download_file
+from spacy.cli.configure import configure_resume_cli, use_tok2vec
 from spacy.cli.debug_data import _compile_gold, _get_labels_from_model
 from spacy.cli.debug_data import _get_labels_from_spancat
 from spacy.cli.debug_data import _get_distribution, _get_kl_divergence
@@ -29,6 +30,7 @@ from spacy.cli.debug_data import _print_span_characteristics
 from spacy.cli.debug_data import _get_spans_length_freq_dist
 from spacy.cli.download import get_compatibility, get_version
 from spacy.cli.init_config import RECOMMENDATIONS, init_config, fill_config
+from spacy.cli.merge import merge_pipelines
 from spacy.cli.package import get_third_party_dependencies
 from spacy.cli.package import _is_permitted_package_name
 from spacy.cli.project.remote_storage import RemoteStorage
@@ -1178,6 +1180,71 @@ def test_upload_download_local_file():
         download_file(remote_file, local_file)
         with local_file.open(mode="r") as file_:
             assert file_.read() == content
+
+
+def test_configure_resume(tmp_path):
+    nlp = spacy.blank("en")
+    nlp.add_pipe("ner")
+    nlp.add_pipe("textcat")
+    base_path = tmp_path / "base"
+    nlp.to_disk(base_path)
+
+    out_path = tmp_path / "resume.cfg"
+    conf = configure_resume_cli(base_path, out_path)
+
+    assert out_path.exists(), "Didn't save config file"
+
+    for comp, val in conf["components"].items():
+        assert "source" in val, f"Non-sourced component: {comp}"
+
+
+def test_use_tok2vec(tmp_path):
+    # Can't add a transformer here because spacy-transformers might not be present
+    nlp = spacy.blank("en")
+    nlp.add_pipe("tok2vec")
+    base_path = tmp_path / "tok2vec_sample_2"
+    nlp.to_disk(base_path)
+
+    out_path = tmp_path / "converted_to_tok2vec"
+    conf = use_tok2vec(base_path, out_path)
+    assert out_path.exists(), "No model saved"
+
+    assert "tok2vec" in conf["components"], "No tok2vec component"
+
+
+def test_merge_pipelines(tmp_path):
+
+    # width is a placeholder, since we won't actually train this
+    listener_config = {
+        "model": {
+            "tok2vec": {"@architectures": "spacy.Tok2VecListener.v1", "width": "0"}
+        }
+    }
+    # base pipeline
+    base = spacy.blank("en")
+    base.add_pipe("tok2vec")
+    base.add_pipe("ner", config=listener_config)
+    base_path = tmp_path / "merge_base"
+    base.to_disk(base_path)
+
+    # added pipeline
+    added = spacy.blank("en")
+    added.add_pipe("tok2vec")
+    added.add_pipe("ner", config=listener_config)
+    added_path = tmp_path / "merge_added"
+    added.to_disk(added_path)
+
+    # these should combine and not have a name collision
+    out_path = tmp_path / "merge_result"
+    merged = merge_pipelines(base_path, added_path, out_path)
+
+    # will give a key error if not present
+    merged.get_pipe("ner")
+    merged.get_pipe("ner2")
+
+    ner2_conf = merged.config["components"]["ner2"]
+    arch = ner2_conf["model"]["tok2vec"]["@architectures"]
+    assert arch == "spacy.HashEmbedCNN.v2", "Wrong arch - listener not replaced?"
 
 
 def test_walk_directory():
